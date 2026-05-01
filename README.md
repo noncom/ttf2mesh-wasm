@@ -11,7 +11,7 @@ This fork focuses on compiling ttf2mesh into Wasm. Thankfully the original libra
     ```
     - `-01` -- one of the most important parameters, defines how much Emscripten should try to treeshake the surface API. Other settings like `-O2`, `-O3`, `-Oz`, etc, are possible, and they will result in different provision by Emscripten.
     - `ttf2mesh.c wasmify.c` -- the files to include into the compiled Wasm module
-    - `TTF_NO_FILESYSTEM=` -- a neccessary setting that skips everything file-system related in ttf2mesh compilation, making it very suitable for building for Wasm
+    - `TTF_NO_FILESYSTEM=1` -- a neccessary setting that skips everything file-system related in ttf2mesh compilation, making it very suitable for building for Wasm
     - `EXPORTED_FUNCTIONS=['_malloc', '_free']` -- these functions are needed to properly communicatee binary data between JS and Wasm
     - `--js-library library.js` -- contains the mockup of the custom API that's expected to be imported from the JS side. In practice that means that when Emscripten encounters these functions being declared as `extern` in the C code, it will know to keep them, and to bridge them with the JS functions provided in Wasm imports during the Wasm module instantiation.
 
