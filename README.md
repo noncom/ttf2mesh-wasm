@@ -1,3 +1,40 @@
+# About this fork
+
+This fork focuses on compiling ttf2mesh into Wasm. Thankfully the original library is already well-prepared for that, and only some setup is needed.
+
+## How to build
+
+1. Make sure `emcc` is available
+2. Run
+    ```sh
+    emcc -O1 ttf2mesh.c wasmify.c -D TTF_NO_FILESYSTEM=1 -s WASM=1 -s STANDALONE_WASM -s EXPORTED_FUNCTIONS=['_malloc','_free'] --js-library library.js
+    ```
+    - `-01` -- one of the most important parameters, defines how much Emscripten should try to treeshake the surface API. Other settings like `-O2`, `-O3`, `-Oz`, etc, are possible, and they will result in different provision by Emscripten.
+    - `ttf2mesh.c wasmify.c` -- the files to include into the compiled Wasm module
+    - `TTF_NO_FILESYSTEM=` -- a neccessary setting that skips everything file-system related in ttf2mesh compilation, making it very suitable for building for Wasm
+    - `EXPORTED_FUNCTIONS=['_malloc', '_free']` -- these functions are needed to properly communicatee binary data between JS and Wasm
+    - `--js-library library.js` -- contains the mockup of the custom API that's expected to be imported from the JS side. In practice that means that when Emscripten encounters these functions being declared as `extern` in the C code, it will know to keep them, and to bridge them with the JS functions provided in Wasm imports during the Wasm module instantiation.
+
+3. Use the generated Wasm file
+4. Optionally use the example TypeScript wrapper to simplify working with the Wasm module.
+
+## How to use from JS
+
+The typical usage from the JS side very much resembles the `simple.c` example:
+
+1. Instantiate the wasm module, providing the necessary imports.
+2. Load the font file on the JS side, and provide the loaded file binary buffer to Wasm.
+3. Load the font from the provided buffer via `wasm_loadFontFromBuffer()`. Note: only one font can't be loaded at a time, and it must be freed before loading another one.
+4. Request glyphs one by one from the font via `wasm_getGlyphMeshData()`. The user is responsible for saving and using this glyph data on the JS side however they want.
+5. Remember to `free()` each of the requested glyphs.
+6. Remember to `free()` the font.
+
+Refer to the provilded `usage-example-01.ts` and `usage-example-02.ts` for more details.
+
+# The original ttf2mesh readme follows
+
+# ttf2mesh
+
 ![image](https://github.com/fetisov/ttf2mesh/blob/assets/logo.png?raw=true)
 
 The ttf2mesh crossplatform library allows to convert a glyphs of truetype font (ttf) to a mesh objects in 2d and 3d space. The library does not require any graphical context and does not use system dependent functions.
