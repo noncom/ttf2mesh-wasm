@@ -8,7 +8,7 @@ import { WasmModuleWrapper } from "./wasm-wrapper.js"
 export type DefaultWasmImports_Funcs = {
 
     /* For logging into JS from Wasm */
-    jsLog: (a: any) => void
+    jsLog: (pointer: number, length: number) => void
 
     /* For calling an abort on the JS side from Wasm */
     _abort_js: () => void
@@ -90,7 +90,10 @@ function createWasmImportsTable(wrapper: WasmModuleWrapper, params: WasmModuleWr
         ... maybeEmscriptenImports,
 
         /* JS glue funcs */
-        jsLog: (a: any) => console.log(a),
+        jsLog: (pointer: number, length: number) => {
+            const s = wrapper.strings.UTF8ArrayToString(wrapper.memory.memoryViews.HEAPU8, pointer, length, false)
+            console.log(s)
+        },
         ___abort_from_js: (message: string) => abort_js_impl(wrapper, state, message), // TODO: This probably should be taken out into some common area, together with abort_js_impl()
         _abort_js: () => abort_js_impl(wrapper, state, 'AbortJS'),
     }

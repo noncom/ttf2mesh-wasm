@@ -57,7 +57,7 @@ export async function testWasm() {
 
     // const fontFilename = "./wasm/DMMono-Regular.ttf"
     const fontFilename = "./wasm/SourceCodePro-Regular.ttf"
-    loadFontFromFilename(wrapper, fontFilename)
+    await loadFontFromFilename(wrapper, fontFilename)
 
     getGlyphData(wrapper, GLYPH_ID)
 }
@@ -105,6 +105,8 @@ function unpackGlyphData(wrapper: WasmModuleWrapper, payloadStart: number, data:
     const verts: T_Vector3[] = []
     const faces: T_Vector3[] = []
     const normals: T_Vector3[] = []
+    
+    /* Reading glyph mesh */
 
     const nvert = r.readInt()
     const nfaces = r.readInt()
@@ -142,7 +144,31 @@ function unpackGlyphData(wrapper: WasmModuleWrapper, payloadStart: number, data:
     const isOutline = r.readInt()
     console.log(" --- is outline=", isOutline)
 
-    // TODO: Process the outline
+    /* Reading outline */
+
+    const nPointsTotal = r.readInt()
+    const nContours = r.readInt()
+
+    for (let iContour = 0; iContour < nContours; iContour++) {
+        const nPointsInContour = r.readInt()
+        const subGlyphId = r.readInt()
+        const order = r.readInt()
+        
+        for (let iPt = 0; iPt < nPointsInContour; iPt++) {
+            const x = r.readFloat()
+            const y = r.readFloat()
+            const spl = r.readUint()
+            const onc = r.readUint()
+            const shd = r.readUint()
+            const res = r.readUint()
+        }
+    }
+
+    /* Reading glyph metadata */
     
-    return { verts, faces, normals }
+    const advanceX = r.readFloat()
+
+    console.log(" --- advanceX=", advanceX)
+    
+    return { verts, faces, normals, advanceX }
 }

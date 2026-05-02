@@ -77,13 +77,16 @@ int calculateSerializedOutlineSize(ttf_outline_t *outline) {
         /* The 3 integer fields of the struct */
         size += sizeof(int) * 3; 
         /* The array of `ttf_point_t` */
-        size += sizeof(ttf_point_t) * outline->cont[i].length;
+        // size += sizeof(ttf_point_t) * outline->cont[i].length; // this doesn't yield the correct size for some reason
+        size += sizeof(int) * 2 * outline->cont[i].length;
+        size += sizeof(int) * 4 * outline->cont[i].length;
+
     }
     return size;
 }
 
 int calculateSerializedMeshSize(ttf_mesh3d_t *mesh) {
-    const int size = 
+    const int meshSize = 
     /* nvert */
     sizeof(int) +
     /* nfaces */
@@ -93,10 +96,29 @@ int calculateSerializedMeshSize(ttf_mesh3d_t *mesh) {
     /* faces */
     (sizeof(int) * 3) * (mesh->nfaces) +
     /* normals */
-    (sizeof(float) * 3) * (mesh->nfaces) +
-    /* outline */
-    calculateSerializedOutlineSize(mesh->outline);
+    (sizeof(float) * 3) * (mesh->nfaces) + 
+    /* is outline? */
+    sizeof(int);
     
+    // log___w_sx("--[Wasm]-- Mesh size=%d", meshSize);
+
+    /* outline */
+    const int outlineSize = calculateSerializedOutlineSize(mesh->outline);
+    
+    // log___w_sx("--[Wasm]-- Outline size=%d", outlineSize);
+
+    const int size = meshSize + outlineSize;
+
+    // log___w_sx("--[Wasm]-- Total size=%d", size);
+
+    return size;
+}
+
+int calculateMetadataSize(ttf_glyph_t *glyph) {
+    const int size =
+    /* Advance X */
+    sizeof(glyph->advance);
+
     return size;
 }
 
@@ -169,9 +191,9 @@ void writeOutline(ttf_outline_t *outline, uint8_t *buffer, int *position) {
  * */
 const int PAYLOAD_START_OFFSET = sizeof(int);
 
-void writeMesh(ttf_mesh3d_t *mesh, uint8_t *buffer, int length) {
-    int offset = PAYLOAD_START_OFFSET;
-    int *o = &offset;
+int writeMesh(ttf_mesh3d_t *mesh, uint8_t *buffer) {
+    int position = PAYLOAD_START_OFFSET;
+    int *o = &position;
     writeInt(buffer, o, mesh->nvert);
     writeInt(buffer, o, mesh->nfaces);
 
@@ -195,18 +217,44 @@ void writeMesh(ttf_mesh3d_t *mesh, uint8_t *buffer, int length) {
      * Therefore the boolean value is encoded with an `int` instead */
     writeBool(buffer, o, mesh->outline != NULL);
 
+    // log___w_sx("--[Wasm]-- Finished writing mesh, position=%d", position);
+
     writeOutline(mesh->outline, buffer, o);
+
+    // log___w_sx("--[Wasm]-- Finished writing outline, position=%d", position);
+
+    return position;
+}
+
+int writeMetadata(ttf_glyph_t* glyph, uint8_t *buffer, int startPosition) {
+    int position = startPosition;
+    int *o = &position;
+
+    writeFloat(buffer, o, glyph->advance);
+    
+    return position;
 }
 
 /**
- * Prepare the mesh for transferring to the JS side
+ * Pack the mesh and the additional glyph data for transferring to the JS side
  */
-uint8_t* packMesh(ttf_mesh3d_t *mesh) {
-    const int size = calculateSerializedMeshSize(mesh);
+uint8_t* packGlyphData(ttf_glyph_t *glyph, ttf_mesh3d_t *mesh) {
+    const int meshSize = calculateSerializedMeshSize(mesh);
+    const int metaDataSize = calculateMetadataSize(glyph);
+    const int size = meshSize + metaDataSize;
+
+    // log___("--[Wasm]-- ----- ----- Begin packing glyph data ----- -----");
+    // log___w_sx(" --[Wasm]-- Estimated size=%d", size);
 
     /* Allocate and pack */
     uint8_t* buffer = (uint8_t*) malloc(size + 4);
-    writeMesh(mesh, buffer, size);
+    
+    int position = writeMesh(mesh, buffer);
+    // log___w_sx(" --[Wasm]-- Mesh written, pos=%d", position);
+    writeMetadata(glyph, buffer, position);
+
+    // log___(" --[Wasm]-- Metadata written");
+
     ((uint32_t* ) buffer)[0] = size;
     return buffer;
 }
@@ -225,14 +273,16 @@ __attribute__((used)) uint8_t* wasm_getGlyphMeshData(wchar_t symbol, uint8_t qua
     }
 
     ttf_mesh3d_t *mesh = NULL;
+    ttf_glyph_t *glyph = &font->glyphs[index];
     // int meshingStatus = ttf_glyph2mesh3d(&font->glyphs[index], &mesh, TTF_QUALITY_NORMAL, TTF_FEATURES_DFLT, 0.1f);
-    int meshingStatus = ttf_glyph2mesh3d(&font->glyphs[index], &mesh, quality, features, depth);
+    
+    int meshingStatus = ttf_glyph2mesh3d(glyph, &mesh, quality, features, depth);
     if (meshingStatus != TTF_DONE) {
         log___w_sx("[ttf2mesh] ttf_glyph2mesh3d() returned error=%d, the returned value will be NULL.", meshingStatus);
         return (uint8_t*)NULL;
     }
 
-    uint8_t* packed = packMesh(mesh);
+    uint8_t* packed = packGlyphData(glyph, mesh);
 
     ttf_free_mesh3d(mesh);
 
