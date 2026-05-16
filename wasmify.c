@@ -41,6 +41,7 @@ void log___w_sx_x(char* string, int a, int b) {
  */
 __attribute__((used)) int wasm_loadFontFromBuffer(const uint8_t *data, int size) {
     int pointer = ttf_load_from_mem(data, size, &font, false);
+    /* // !!! This implicit free() would immediately release the font data buffer.*/
     free(data);
     return pointer;
 }
